@@ -1,0 +1,58 @@
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  NODE_ENV: development
+  DB_HOST: mysql
+  DB_USER: perfume_user
+  DB_PASSWORD: perfume_password
+  DB_NAME: perfume_db
+  MYSQL_ROOT_PASSWORD: rootpassword
+  MYSQL_PORT: 3306
+
+# Use docker-in-docker
+image: docker:24.0.5
+
+services:
+  - docker:dind
+
+before_script:
+  - docker info
+
+# Build the Node.js Docker image
+build_app:
+  stage: build
+  script:
+    - docker build -t nodejs-express-mysql .
+  tags:
+    - docker
+  only:
+    - main
+
+# Run tests (or run your app to verify DB connection)
+test_app:
+  stage: test
+  script:
+    # Start MySQL container
+    - docker run -d --name mysql_test -e MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD -e MYSQL_DATABASE=$DB_NAME -e MYSQL_USER=$DB_USER -e MYSQL_PASSWORD=$DB_PASSWORD -p 3306:3306 mysql:8
+    # Wait for MySQL to be ready
+    - sleep 20
+    # Run your Node.js container
+    - docker run --rm --name node_test --link mysql_test:mysql -e DB_HOST=mysql -e DB_USER=$DB_USER -e DB_PASSWORD=$DB_PASSWORD -e DB_NAME=$DB_NAME nodejs-express-mysql node server.js
+  tags:
+    - docker
+  only:
+    - main
+
+# Optional deploy stage
+deploy_app:
+  stage: deploy
+  script:
+    - echo "Deploy step here, e.g., push Docker image or SSH to server"
+  when: manual
+  tags:
+    - docker
+  only:
+    - main
